@@ -5,7 +5,8 @@ using UnityEngine.Networking;
 public class PlayerController : NetworkBehaviour {
 
 	public Transform		head;
-	public ParticleSystem	weapon;
+	public Transform		bulletShooter;
+	public GameObject		bulletPrefab;
 	public GameObject		cameraObject;
 
 	[SpaceAttribute]
@@ -25,16 +26,8 @@ public class PlayerController : NetworkBehaviour {
 	float					speedSmoothVelocity;
 	bool					canFire = true;
 
-	public delegate void PlayerFireDelegate();
-
-	[SyncEvent]
-	public event PlayerFireDelegate EventPlayerFire;
-
 	// Use this for initialization
 	void Start () {
-		if (NetworkClient.active)
-			EventPlayerFire += Fire;
-
         if (!isLocalPlayer)
 		{
 			tag = "Enemy";
@@ -96,19 +89,17 @@ public class PlayerController : NetworkBehaviour {
 
 	IEnumerator	resetCanFire()
 	{
-		yield return new WaitForSeconds(.100f);
+		yield return new WaitForSeconds(.500f);
 		canFire = true;
 	}
 
-	void Fire()
+	[Command]
+	void CmdFire()
 	{
-		canFire = false;
-		var emitParams = new ParticleSystem.EmitParams();
-		emitParams.startColor = Color.red;
-		emitParams.startSize = 0.2f;
-		emitParams.rotation3D = head.rotation.eulerAngles;
-		weapon.Emit(emitParams, 1);
-		StartCoroutine(resetCanFire());
+		GameObject g = Instantiate(bulletPrefab, bulletShooter.position, bulletShooter.rotation) as GameObject;
+		g.GetComponent< Rigidbody >().velocity = bulletShooter.forward * 30;
+		Destroy(g, 10);
+		NetworkServer.Spawn(g);
 	}
 	
 	// Update is called once per frame
@@ -125,7 +116,11 @@ public class PlayerController : NetworkBehaviour {
 			Jump();
 
 		if (Input.GetMouseButton(0) && canFire)
-			EventPlayerFire();
+		{
+			canFire = false;
+			CmdFire();
+			StartCoroutine(resetCanFire());
+		}
 
 		if (Input.GetKeyDown(KeyCode.Escape))
 			Cursor.lockState = CursorLockMode.Confined;
